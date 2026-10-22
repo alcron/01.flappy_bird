@@ -1,4 +1,3 @@
-use avian2d::prelude::*;
 use bevy::{prelude::*, window::AppLifecycle};
 
 // Named `GameState` rather than `State`, which would clash with Bevy's own `State<S>` resource.
@@ -17,20 +16,8 @@ pub struct StatePlugin;
 impl Plugin for StatePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GameState>()
-            // Physics only runs while playing, so the bird hangs still in menus and pauses.
-            .add_systems(Startup, pause_physics)
-            .add_systems(OnEnter(GameState::Playing), unpause_physics)
-            .add_systems(OnExit(GameState::Playing), pause_physics)
             .add_systems(Update, (handle_keyboard, pause_on_suspend));
     }
-}
-
-fn pause_physics(mut time: ResMut<Time<Physics>>) {
-    time.pause();
-}
-
-fn unpause_physics(mut time: ResMut<Time<Physics>>) {
-    time.unpause();
 }
 
 /// On phones the app can be sent to the background at any moment (home gesture, a call),

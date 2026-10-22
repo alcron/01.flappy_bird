@@ -4,15 +4,13 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::{
-    MAX_VIEW_WIDTH, SCROLL_SPEED, VIEW_HEIGHT, bird::BIRD_X, loading::GameAssets, score::Score,
-    state::GameState,
+    MAX_VIEW_WIDTH, VIEW_HEIGHT, bird::Bird, loading::GameAssets, score::Score, state::GameState,
 };
 
 // pipe.png is 400x2914; keep its aspect ratio when scaling it down.
 const PIPE_WIDTH: f32 = 40.;
 const PIPE_HEIGHT: f32 = PIPE_WIDTH * 2914. / 400.; // ~291
 const PIPE_GAP: f32 = 100.; // vertical space between the two pipes
-const PIPE_SPEED: f32 = SCROLL_SPEED * 1.;
 const PIPE_SPACING: f32 = 160.; // horizontal distance between neighbouring pairs
 
 // Each pair's gap center is picked at random within this distance from the screen center.
@@ -22,9 +20,10 @@ const MAX_GAP_OFFSET: f32 = VIEW_HEIGHT / 2. - PIPE_GAP / 2. - GAP_EDGE_MARGIN;
 // Even with the gap at its highest or lowest, the pipes must still reach past the screen edges.
 const _: () = assert!(PIPE_HEIGHT >= VIEW_HEIGHT / 2. + MAX_GAP_OFFSET - PIPE_GAP / 2.);
 
-// Just outside the edges of the widest view, so pairs appear and disappear out of view.
-const SPAWN_X: f32 = MAX_VIEW_WIDTH / 2. + PIPE_WIDTH / 2.;
-const DESPAWN_X: f32 = -SPAWN_X;
+// How far ahead of / behind the bird pairs appear and disappear. The camera is centered
+// on the bird, so this is just outside the edges of the widest view.
+const SPAWN_DISTANCE: f32 = MAX_VIEW_WIDTH / 2. + PIPE_WIDTH / 2.;
+const DESPAWN_DISTANCE: f32 = SPAWN_DISTANCE;
 
 pub struct PipesPlugin;
 
@@ -42,7 +41,7 @@ impl Plugin for PipesPlugin {
             )
             .add_systems(
                 Update,
-                (move_pipes, score_pipes, spawn_pipes, despawn_pipes)
+                (score_pipes, spawn_pipes, despawn_pipes)
                     .chain()
                     .run_if(in_state(GameState::Playing)),
             );
@@ -50,8 +49,8 @@ impl Plugin for PipesPlugin {
 }
 
 /// Live pipe pairs ordered from left to right.
-/// Pairs all move at the same speed, so new ones always go to the back
-/// and the front is always the first to leave the screen.
+/// New pairs are always placed further right, so they go to the back,
+/// and the front is always the first one the bird leaves behind.
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct PipePairs(VecDeque<Entity>);
 
@@ -65,7 +64,7 @@ impl PipePairs {
     }
 }
 
-/// Parent of a top and bottom pipe; moving it moves both.
+/// Parent of a top and bottom pipe; positions both.
 #[derive(Component)]
 struct PipePair;
 
@@ -84,19 +83,17 @@ fn reset_pipes(mut commands: Commands, mut pairs: ResMut<PipePairs>) {
     }
 }
 
-fn move_pipes(time: Res<Time>, mut query: Query<&mut Transform, With<PipePair>>) {
-    for mut transform in &mut query {
-        transform.translation.x -= PIPE_SPEED * time.delta_secs();
-    }
-}
-
 fn score_pipes(
     mut commands: Commands,
     mut score: ResMut<Score>,
+    birds: Query<&Transform, With<Bird>>,
     query: Query<(Entity, &Transform), (With<PipePair>, Without<Passed>)>,
 ) {
+    let Ok(bird) = birds.single() else {
+        return;
+    };
     for (entity, transform) in &query {
-        if transform.translation.x < BIRD_X {
+        if transform.translation.x < bird.translation.x {
             **score += 1;
             commands.entity(entity).insert(Passed);
         }
@@ -107,8 +104,13 @@ fn spawn_pipes(
     mut commands: Commands,
     assets: Res<GameAssets>,
     mut pairs: ResMut<PipePairs>,
+    birds: Query<&Transform, With<Bird>>,
     query: Query<&Transform, With<PipePair>>,
 ) {
+    let Ok(bird) = birds.single() else {
+        return;
+    };
+    let spawn_x = bird.translation.x + SPAWN_DISTANCE;
     let rightmost_x = pairs
         .rightmost()
         .and_then(|entity| query.get(entity).ok())
@@ -116,9 +118,9 @@ fn spawn_pipes(
 
     let new_x = match rightmost_x {
         // Place the new pair relative to the last one so spacing stays exact.
-        Some(x) if x <= SPAWN_X - PIPE_SPACING => x + PIPE_SPACING,
+        Some(x) if x <= spawn_x - PIPE_SPACING => x + PIPE_SPACING,
         Some(_) => return,
-        None => SPAWN_X,
+        None => spawn_x,
     };
     let entity = spawn_pipe_pair(&mut commands, &assets, new_x);
     pairs.push_back(entity);
@@ -127,14 +129,19 @@ fn spawn_pipes(
 fn despawn_pipes(
     mut commands: Commands,
     mut pairs: ResMut<PipePairs>,
+    birds: Query<&Transform, With<Bird>>,
     query: Query<&Transform, With<PipePair>>,
 ) {
+    let Ok(bird) = birds.single() else {
+        return;
+    };
+    let despawn_x = bird.translation.x - DESPAWN_DISTANCE;
     // Only the leftmost pairs can be off screen, so stop at the first one that isn't.
     while let Some(entity) = pairs.leftmost() {
         let Ok(transform) = query.get(entity) else {
             break;
         };
-        if transform.translation.x >= DESPAWN_X {
+        if transform.translation.x >= despawn_x {
             break;
         }
         // Also despawns the child pipes.
@@ -154,8 +161,7 @@ fn spawn_pipe_pair(commands: &mut Commands, assets: &GameAssets, x: f32) -> Enti
             PipePair,
             Transform::from_xyz(x, gap_y, 0.),
             Visibility::default(),
-            // Moved by code, not by forces; the bird bumping into it can't push it.
-            RigidBody::Kinematic,
+            // No rigid body: colliders without one are static, which suits pipes that never move.
             children![
                 // Bottom pipe: texture as is, opening faces up toward the gap.
                 (

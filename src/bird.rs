@@ -1,10 +1,7 @@
 use avian2d::prelude::*;
 use bevy::prelude::*;
 
-use crate::{SCROLL_SPEED, VIEW_HEIGHT, loading::GameAssets, state::GameState};
-
-/// The bird never moves sideways, so this is its x for the whole round.
-pub const BIRD_X: f32 = 0.;
+use crate::{FLIGHT_SPEED, VIEW_HEIGHT, loading::GameAssets, state::GameState};
 
 // bird.png is 641x427; keep its aspect ratio when scaling it down.
 const BIRD_WIDTH: f32 = 34.;
@@ -12,7 +9,10 @@ const BIRD_HEIGHT: f32 = BIRD_WIDTH * 427. / 641.; // ~23
 const BIRD_RADIUS: f32 = BIRD_HEIGHT / 2.;
 // With a mass of 1, an impulse changes the velocity by exactly its value.
 const BIRD_MASS: f32 = 1.;
-const FLAP_IMPULSE: f32 = 20.; // upward, in world units per second at mass 1
+// Upward impulse per second of holding, so the lift doesn't depend on frame rate.
+// Equal to the old 20 per frame at 60 FPS; at mass 1 it's an upward acceleration
+// in world units per second squared, twice the strength of gravity.
+const FLAP_IMPULSE_PER_SECOND: f32 = 1200.;
 // Tilt limits, so the bird never points straight up or flips over.
 const MAX_UP_ANGLE: f32 = 30_f32.to_radians();
 const MAX_DOWN_ANGLE: f32 = 90_f32.to_radians();
@@ -38,8 +38,9 @@ impl Plugin for BirdPlugin {
     }
 }
 
+/// Public so the camera can follow it and pipes can be placed and scored relative to it.
 #[derive(Component)]
-struct Bird;
+pub struct Bird;
 
 /// Child of the bird holding its sprite; only this is rotated,
 /// so tilting never touches the physics body.
@@ -53,13 +54,19 @@ fn reset_bird(mut commands: Commands, assets: Res<GameAssets>, birds: Query<Enti
     commands
         .spawn((
             Bird,
-            Transform::from_xyz(BIRD_X, 0., 1.),
+            // Every round starts at the world origin.
+            Transform::from_xyz(0., 0., 1.),
             Visibility::default(),
             RigidBody::Dynamic,
+            // Nothing slows it down (no damping, pipes are sensors), so this speed stays constant.
+            LinearVelocity(Vec2::X * FLIGHT_SPEED),
+            // Physics runs in fixed steps; without this the camera following the bird
+            // would make the whole world stutter.
+            TransformInterpolation,
             Collider::circle(BIRD_RADIUS),
             Mass(BIRD_MASS),
-            // Only vertical movement: no sliding sideways, no spinning.
-            LockedAxes::ROTATION_LOCKED.lock_translation_x(),
+            // No spinning; the visible tilt is on the sprite child.
+            LockedAxes::ROTATION_LOCKED,
             // Needed for the `CollisionStart` event that ends the game.
             CollisionEventsEnabled,
             children![(
@@ -95,11 +102,9 @@ fn tilt_bird(
     mut sprites: Query<&mut Transform, With<BirdSprite>>,
 ) {
     for (velocity, children) in &birds {
-        // The bird only moves vertically, but relative to the world it flies
-        // forward at the scroll speed, so use that as the horizontal part.
         let angle = velocity
             .y
-            .atan2(SCROLL_SPEED)
+            .atan2(velocity.x)
             .clamp(-MAX_DOWN_ANGLE, MAX_UP_ANGLE);
         for child in children.iter() {
             if let Ok(mut transform) = sprites.get_mut(child) {
@@ -110,6 +115,7 @@ fn tilt_bird(
 }
 
 fn flap(
+    time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     touches: Res<Touches>,
     mut query: Query<Forces, With<Bird>>,
@@ -120,6 +126,6 @@ fn flap(
         return;
     }
     for mut forces in &mut query {
-        forces.apply_linear_impulse(Vec2::Y * FLAP_IMPULSE);
+        forces.apply_linear_impulse(Vec2::Y * FLAP_IMPULSE_PER_SECOND * time.delta_secs());
     }
 }
