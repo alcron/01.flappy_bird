@@ -1,0 +1,23 @@
+[package]
+name = "flappy_bird"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+avian2d = "0.8.0"
+bevy = { version = "0.20", features = [
+    "dynamic_linking", "file_watcher", "bevy_feathers", "jpeg", "debug",
+    "keyboard", "mouse", "touch", # enabled by bevy_enhanced_input in shadowlands
+] }
+rand = "0.10"
+ron = "0.12.2"
+serde = { version = "1.0.229", features = ["derive"] }
+
+
+# Enable a small amount of optimization in the dev profile.
+[profile.dev]
+opt-level = 1
+
+# Enable a large amount of optimization in the dev profile for dependencies.
+[profile.dev.package."*"]
+opt-level = 3
