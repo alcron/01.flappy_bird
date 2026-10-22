@@ -7,7 +7,7 @@ mod score;
 mod state;
 
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowMode};
 
 use background::BackgroundPlugin;
 use bird::BirdPlugin;
@@ -32,7 +32,19 @@ const GRAVITY: f32 = 600.;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    // Otherwise iOS creates the window at Bevy's default 1280x720 points,
+                    // larger than the phone screen.
+                    mode: if DESKTOP {
+                        WindowMode::Windowed
+                    } else {
+                        WindowMode::BorderlessFullscreen(MonitorSelection::Primary)
+                    },
+                    ..default()
+                }),
+                ..default()
+            }),
             PhysicsPlugins::default(),
             StatePlugin,
             ScorePlugin,
