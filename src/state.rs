@@ -1,5 +1,5 @@
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::AppLifecycle};
 
 // Named `GameState` rather than `State`, which would clash with Bevy's own `State<S>` resource.
 #[derive(States, Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,7 +21,7 @@ impl Plugin for StatePlugin {
             .add_systems(Startup, pause_physics)
             .add_systems(OnEnter(GameState::Playing), unpause_physics)
             .add_systems(OnExit(GameState::Playing), pause_physics)
-            .add_systems(Update, handle_keyboard);
+            .add_systems(Update, (handle_keyboard, pause_on_suspend));
     }
 }
 
@@ -31,6 +31,20 @@ fn pause_physics(mut time: ResMut<Time<Physics>>) {
 
 fn unpause_physics(mut time: ResMut<Time<Physics>>) {
     time.unpause();
+}
+
+/// On phones the app can be sent to the background at any moment (home gesture, a call),
+/// so pause the round instead of letting the bird fall the moment the app comes back.
+fn pause_on_suspend(
+    mut lifecycle_events: MessageReader<AppLifecycle>,
+    state: Res<State<GameState>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    for event in lifecycle_events.read() {
+        if *event == AppLifecycle::WillSuspend && *state.get() == GameState::Playing {
+            next_state.set(GameState::Paused);
+        }
+    }
 }
 
 /// Keyboard shortcuts for the same actions the menu buttons offer.

@@ -17,8 +17,13 @@ use pipes::PipesPlugin;
 use score::ScorePlugin;
 use state::StatePlugin;
 
-const VIEW_WIDTH: f32 = 480.;
+// The camera always shows exactly this height; the width follows the screen's aspect ratio.
 const VIEW_HEIGHT: f32 = 270.;
+// Widest view the game supports (21:9, wider than any iPhone at ~19.5:9).
+// The background is sized and pipes spawn/despawn based on it, so nothing pops in on wide screens.
+const MAX_VIEW_WIDTH: f32 = VIEW_HEIGHT * 21. / 9.;
+// Phones and tablets have no keyboard and apps there shouldn't quit themselves.
+const DESKTOP: bool = cfg!(not(any(target_os = "ios", target_os = "android")));
 // Base scroll speed in world units per second; each layer scales it.
 const SCROLL_SPEED: f32 = 60.;
 // Downward acceleration in world units per second squared.
@@ -46,9 +51,8 @@ fn setup(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            scaling_mode: bevy::camera::ScalingMode::AutoMax {
-                max_width: VIEW_WIDTH,
-                max_height: VIEW_HEIGHT,
+            scaling_mode: bevy::camera::ScalingMode::FixedVertical {
+                viewport_height: VIEW_HEIGHT,
             },
             ..OrthographicProjection::default_2d()
         }),

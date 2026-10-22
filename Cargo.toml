@@ -6,13 +6,18 @@ edition = "2024"
 [dependencies]
 avian2d = "0.8.0"
 bevy = { version = "0.20", features = [
-    "dynamic_linking", "file_watcher", "bevy_feathers", "jpeg", "debug",
+    "bevy_feathers", "jpeg", "debug",
     "keyboard", "mouse", "touch", # enabled by bevy_enhanced_input in shadowlands
 ] }
 rand = "0.10"
 ron = "0.12.2"
 serde = { version = "1.0.229", features = ["derive"] }
 
+[features]
+default = ["dev"]
+# Desktop development only: faster rebuilds and asset hot reloading.
+# Neither works on iOS, so build for it with `--no-default-features`.
+dev = ["bevy/dynamic_linking", "bevy/file_watcher"]
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

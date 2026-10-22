@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 
-use crate::{SCROLL_SPEED, VIEW_HEIGHT, VIEW_WIDTH, loading::GameAssets, state::GameState};
+use crate::{MAX_VIEW_WIDTH, SCROLL_SPEED, VIEW_HEIGHT, loading::GameAssets, state::GameState};
 
-// background.jpg is 6400x3600; scale it so one tile exactly fills the view height.
-const BACKGROUND_SCALE: f32 = VIEW_HEIGHT / 3600.;
-const BACKGROUND_TILE_WIDTH: f32 = 6400. * BACKGROUND_SCALE; // 480
+// Size of background.jpg in pixels; scale it so one tile exactly fills the view height.
+const BACKGROUND_IMAGE_WIDTH: f32 = 1600.;
+const BACKGROUND_IMAGE_HEIGHT: f32 = 900.;
+const BACKGROUND_SCALE: f32 = VIEW_HEIGHT / BACKGROUND_IMAGE_HEIGHT;
+const BACKGROUND_TILE_WIDTH: f32 = BACKGROUND_IMAGE_WIDTH * BACKGROUND_SCALE; // 480
 const BACKGROUND_SPEED: f32 = SCROLL_SPEED * 0.5; // slower than pipes, so it looks farther away
 
 pub struct BackgroundPlugin;
@@ -26,8 +28,8 @@ impl Plugin for BackgroundPlugin {
 struct Background;
 
 fn spawn_background(mut commands: Commands, assets: Res<GameAssets>) {
-    // One sprite, two tiles wide, so the view is always covered while it slides left.
-    let width = VIEW_WIDTH + BACKGROUND_TILE_WIDTH;
+    // The widest view plus one tile, so the view is always covered while it slides left.
+    let width = MAX_VIEW_WIDTH + BACKGROUND_TILE_WIDTH;
     commands.spawn((
         Background,
         Sprite {
@@ -41,7 +43,7 @@ fn spawn_background(mut commands: Commands, assets: Res<GameAssets>) {
             ..default()
         },
         // Left edge aligned with the left edge of the view.
-        Transform::from_xyz((width - VIEW_WIDTH) / 2., 0., -10.),
+        Transform::from_xyz((width - MAX_VIEW_WIDTH) / 2., 0., -10.),
     ));
 }
 

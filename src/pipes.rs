@@ -4,7 +4,7 @@ use avian2d::prelude::*;
 use bevy::prelude::*;
 
 use crate::{
-    SCROLL_SPEED, VIEW_HEIGHT, VIEW_WIDTH, bird::BIRD_X, loading::GameAssets, score::Score,
+    MAX_VIEW_WIDTH, SCROLL_SPEED, VIEW_HEIGHT, bird::BIRD_X, loading::GameAssets, score::Score,
     state::GameState,
 };
 
@@ -22,8 +22,8 @@ const MAX_GAP_OFFSET: f32 = VIEW_HEIGHT / 2. - PIPE_GAP / 2. - GAP_EDGE_MARGIN;
 // Even with the gap at its highest or lowest, the pipes must still reach past the screen edges.
 const _: () = assert!(PIPE_HEIGHT >= VIEW_HEIGHT / 2. + MAX_GAP_OFFSET - PIPE_GAP / 2.);
 
-// Just outside the screen edges, so pairs appear and disappear out of view.
-const SPAWN_X: f32 = VIEW_WIDTH / 2. + PIPE_WIDTH / 2.;
+// Just outside the edges of the widest view, so pairs appear and disappear out of view.
+const SPAWN_X: f32 = MAX_VIEW_WIDTH / 2. + PIPE_WIDTH / 2.;
 const DESPAWN_X: f32 = -SPAWN_X;
 
 pub struct PipesPlugin;

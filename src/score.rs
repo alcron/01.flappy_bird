@@ -1,12 +1,11 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::state::GameState;
 
-/// Relative to the working directory, i.e. the project root under `cargo run`.
-const HIGH_SCORE_PATH: &str = "high_score.ron";
+const HIGH_SCORE_FILE: &str = "high_score.ron";
 
 pub struct ScorePlugin;
 
@@ -32,31 +31,52 @@ impl Plugin for ScorePlugin {
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct Score(pub u32);
 
-/// Best score across all runs, stored in `HIGH_SCORE_PATH`.
+/// Best score across all runs, stored in `high_score_path()`.
 #[derive(Resource, Serialize, Deserialize, Default)]
 pub struct HighScore {
     pub best: u32,
 }
 
+fn high_score_path() -> PathBuf {
+    // The app bundle is read-only on iOS; `HOME` points at the app's own writable container.
+    #[cfg(target_os = "ios")]
+    if let Some(home) = std::env::var_os("HOME") {
+        return PathBuf::from(home)
+            .join("Library/Application Support")
+            .join(HIGH_SCORE_FILE);
+    }
+    // Relative to the working directory, i.e. the project root under `cargo run`.
+    PathBuf::from(HIGH_SCORE_FILE)
+}
+
 fn load_high_score() -> HighScore {
-    let Ok(contents) = fs::read_to_string(HIGH_SCORE_PATH) else {
+    let path = high_score_path();
+    let Ok(contents) = fs::read_to_string(&path) else {
         // No file yet: first run.
         return HighScore::default();
     };
     ron::from_str(&contents).unwrap_or_else(|error| {
-        warn!("Couldn't parse {HIGH_SCORE_PATH}, starting from 0: {error}");
+        warn!(
+            "Couldn't parse {}, starting from 0: {error}",
+            path.display()
+        );
         HighScore::default()
     })
 }
 
 fn save_high_score(high_score: &HighScore) {
+    let path = high_score_path();
     let result = ron::ser::to_string_pretty(high_score, ron::ser::PrettyConfig::default())
         .map_err(|error| error.to_string())
         .and_then(|contents| {
-            fs::write(HIGH_SCORE_PATH, contents).map_err(|error| error.to_string())
+            // Application Support doesn't exist on iOS until something creates it.
+            if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+                fs::create_dir_all(dir).map_err(|error| error.to_string())?;
+            }
+            fs::write(&path, contents).map_err(|error| error.to_string())
         });
     if let Err(error) = result {
-        warn!("Couldn't save {HIGH_SCORE_PATH}: {error}");
+        warn!("Couldn't save {}: {error}", path.display());
     }
 }
 

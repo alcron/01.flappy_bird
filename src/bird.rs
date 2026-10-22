@@ -109,8 +109,14 @@ fn tilt_bird(
     }
 }
 
-fn flap(keyboard_input: Res<ButtonInput<KeyCode>>, mut query: Query<Forces, With<Bird>>) {
-    if !keyboard_input.pressed(KeyCode::Space) {
+fn flap(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    touches: Res<Touches>,
+    mut query: Query<Forces, With<Bird>>,
+) {
+    // Holding a finger anywhere on the screen works like holding Space.
+    let touching = touches.iter().next().is_some();
+    if !keyboard_input.pressed(KeyCode::Space) && !touching {
         return;
     }
     for mut forces in &mut query {

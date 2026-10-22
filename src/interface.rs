@@ -6,6 +6,7 @@ use bevy::{
 };
 
 use crate::{
+    DESKTOP,
     score::{HighScore, Score, update_high_score},
     state::GameState,
 };
@@ -27,6 +28,7 @@ impl Plugin for InterfacePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Loading), spawn_loading_screen)
             .add_systems(OnEnter(GameState::MainMenu), spawn_main_menu)
+            .add_systems(OnEnter(GameState::Playing), spawn_pause_button)
             .add_systems(OnEnter(GameState::Paused), spawn_pause_menu)
             // After the high score update, so the menu shows the new best.
             .add_systems(
@@ -109,48 +111,85 @@ fn show_score_display(
     }
 }
 
-fn spawn_main_menu(mut commands: Commands, high_score: Res<HighScore>) {
+/// Small button in the top-right corner; the only way to pause without a keyboard.
+fn spawn_pause_button(mut commands: Commands) {
     commands.spawn((
-        DespawnOnExit(GameState::MainMenu),
-        screen(OVERLAY_COLOR),
-        children![
-            text("Flappy Bird", TITLE_FONT_SIZE),
-            text(&format!("Best: {}", high_score.best), BUTTON_FONT_SIZE),
-            button("Play", ButtonAction::GoTo(GameState::Playing)),
-            button("Quit", ButtonAction::Quit),
-            text("Space - play, Esc - quit", HINT_FONT_SIZE),
-        ],
+        DespawnOnExit(GameState::Playing),
+        Node {
+            position_type: PositionType::Absolute,
+            top: px(16),
+            right: px(16),
+            ..default()
+        },
+        children![sized_button(
+            "II",
+            ButtonAction::GoTo(GameState::Paused),
+            px(50),
+            px(50)
+        )],
     ));
+}
+
+fn spawn_main_menu(mut commands: Commands, high_score: Res<HighScore>) {
+    let menu = commands
+        .spawn((
+            DespawnOnExit(GameState::MainMenu),
+            screen(OVERLAY_COLOR),
+            children![
+                text("Flappy Bird", TITLE_FONT_SIZE),
+                text(&format!("Best: {}", high_score.best), BUTTON_FONT_SIZE),
+                button("Play", ButtonAction::GoTo(GameState::Playing)),
+            ],
+        ))
+        .id();
+    if DESKTOP {
+        commands.entity(menu).with_children(|menu| {
+            menu.spawn(button("Quit", ButtonAction::Quit));
+            menu.spawn(text("Space - play, Esc - quit", HINT_FONT_SIZE));
+        });
+    }
 }
 
 fn spawn_pause_menu(mut commands: Commands) {
-    commands.spawn((
-        DespawnOnExit(GameState::Paused),
-        screen(OVERLAY_COLOR),
-        children![
-            text("Paused", TITLE_FONT_SIZE),
-            button("Resume", ButtonAction::GoTo(GameState::Playing)),
-            button("Main menu", ButtonAction::GoTo(GameState::MainMenu)),
-            text("Esc - resume", HINT_FONT_SIZE),
-        ],
-    ));
+    let menu = commands
+        .spawn((
+            DespawnOnExit(GameState::Paused),
+            screen(OVERLAY_COLOR),
+            children![
+                text("Paused", TITLE_FONT_SIZE),
+                button("Resume", ButtonAction::GoTo(GameState::Playing)),
+                button("Main menu", ButtonAction::GoTo(GameState::MainMenu)),
+            ],
+        ))
+        .id();
+    if DESKTOP {
+        commands
+            .entity(menu)
+            .with_child(text("Esc - resume", HINT_FONT_SIZE));
+    }
 }
 
 fn spawn_game_over_menu(mut commands: Commands, score: Res<Score>, high_score: Res<HighScore>) {
-    commands.spawn((
-        DespawnOnExit(GameState::GameOver),
-        screen(OVERLAY_COLOR),
-        children![
-            text("Game Over", TITLE_FONT_SIZE),
-            text(
-                &format!("Score: {}   Best: {}", **score, high_score.best),
-                BUTTON_FONT_SIZE
-            ),
-            button("Restart", ButtonAction::GoTo(GameState::Playing)),
-            button("Main menu", ButtonAction::GoTo(GameState::MainMenu)),
-            text("Space - restart", HINT_FONT_SIZE),
-        ],
-    ));
+    let menu = commands
+        .spawn((
+            DespawnOnExit(GameState::GameOver),
+            screen(OVERLAY_COLOR),
+            children![
+                text("Game Over", TITLE_FONT_SIZE),
+                text(
+                    &format!("Score: {}   Best: {}", **score, high_score.best),
+                    BUTTON_FONT_SIZE
+                ),
+                button("Restart", ButtonAction::GoTo(GameState::Playing)),
+                button("Main menu", ButtonAction::GoTo(GameState::MainMenu)),
+            ],
+        ))
+        .id();
+    if DESKTOP {
+        commands
+            .entity(menu)
+            .with_child(text("Space - restart", HINT_FONT_SIZE));
+    }
 }
 
 /// Full-window node that stacks its children vertically in the center.
@@ -182,12 +221,16 @@ fn text(content: &str, font_size: f32) -> impl Bundle {
 }
 
 fn button(label: &str, action: ButtonAction) -> impl Bundle {
+    sized_button(label, action, px(200), px(50))
+}
+
+fn sized_button(label: &str, action: ButtonAction, width: Val, height: Val) -> impl Bundle {
     (
         Button,
         Hovered::default(),
         Node {
-            width: px(200),
-            height: px(50),
+            width,
+            height,
             justify_content: JustifyContent::Center,
             align_items: AlignItems::Center,
             border_radius: BorderRadius::all(px(8)),
